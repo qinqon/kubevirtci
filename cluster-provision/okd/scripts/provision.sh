@@ -90,29 +90,154 @@ if [ ! -f "/etc/installer/token" ]; then
     exit 1
 fi
 
+INSTALL_CONFIG_FILE=/root/install/install-config.yaml
+
+# we need to install jq and yq to make yaml changes
+dnf install -y jq
+pip install yq
+
 mkdir -p /root/install
-cp /install-config.yaml /root/install/
 
-# inject pull secret into install config
-cat /etc/installer/token >> /root/install/install-config.yaml
+if [[ $INSTALLER_TAG =~ ^.*4\.1$ ]]; then
+    cp /install-config.yaml /root/install/
 
-# inject vagrant ssh public key into install config
-ssh_pub_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
-echo "sshKey: '$ssh_pub_key'" >> /root/install/install-config.yaml
+    # inject pull secret into install config
+    cat /etc/installer/token >> /root/install/install-config.yaml
 
-if [ ! -z $INSTALLER_RELEASE_IMAGE ]; then
-    export OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE=$INSTALLER_RELEASE_IMAGE
+    # inject vagrant ssh public key into install config
+    ssh_pub_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
+    echo "sshKey: '$ssh_pub_key'" >> /root/install/install-config.yaml
+
+    if [ ! -z $INSTALLER_RELEASE_IMAGE ]; then
+        export OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE=$INSTALLER_RELEASE_IMAGE
+    fi
+
+    # increase workers memory to 6144MB
+    /openshift-install create manifests --dir=/root/install
+    sed -i -e "s/domainMemory: 4096/domainMemory: $WORKERS_MEMORY/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
+    sed -i -e "s/domainVcpu: 2/domainVcpu: $WORKERS_CPU/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
+
+    # run installer
+    export TF_VAR_libvirt_master_memory=$MASTER_MEMORY
+    export TF_VAR_libvirt_master_vcpu=$MASTER_CPU
+
+elif [[ $INSTALLER_TAG =~ ^.*4\.2$ ]]; then
+    cp /install-config.yaml /tmp/install-config.yaml.tmp
+
+    # set number of workers
+    cat /tmp/install-config.yaml.tmp | yq -y '.compute[].replicas = 2' > "$INSTALL_CONFIG_FILE"
+
+    # inject pull secret into install config
+    cat /etc/installer/token >> "$INSTALL_CONFIG_FILE"
+
+    # inject vagrant ssh public key into install config
+    ssh_pub_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
+    echo "sshKey: '$ssh_pub_key'" >> "$INSTALL_CONFIG_FILE"
+
+    if [ ! -z $INSTALLER_RELEASE_IMAGE ]; then
+        export OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE=$INSTALLER_RELEASE_IMAGE
+    fi
+
+    # print version
+    /openshift-install version
+
+    export CLUSTER_DIR=/root/install
+
+    # Generate manifests
+    /openshift-install --dir "${CLUSTER_DIR}" create manifests
+
+    # increase workers memory to 6144MB
+    sed -i -e "s/domainMemory: 4096/domainMemory: $WORKERS_MEMORY/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
+    sed -i -e "s/domainVcpu: 2/domainVcpu: $WORKERS_CPU/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
+
+    # generate machineconfig for insecure-registries
+    cat > registries.conf << __EOF__
+[registries]
+  [registries.search]
+    registries = ["registry.access.redhat.com", "docker.io"]
+  [registries.insecure]
+    registries = ["brew-pulp-docker01.web.prod.ext.phx2.redhat.com:8888", "registry:5000"]
+  [registries.block]
+    registries = []
+__EOF__
+
+    cat > registries.yaml << __EOF__
+spec:
+  config:
+    ignition:
+      config: {}
+      security:
+        tls: {}
+      timeouts: {}
+      version: 2.2.0
+    networkd: {}
+    passwd: {}
+    storage: {
+            "files": [
+                {
+                    "path": "/etc/containers/registries.conf",
+                    "filesystem": "root",
+                    "mode": 420,
+                    "contents": {
+                    "source": "data:;base64,$(cat registries.conf|base64 -w0)"
+                    }
+                }
+            ]
+        }
+    systemd: {
+        "units": [
+            {
+                "contents": "[Unit]\nDescription=Update system CA\nAfter=syslog.target network.target\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/update-ca-trust\nRemainAfterExit=true\n\n[Install]\nWantedBy=multi-user.target\n",
+                "enabled": true,
+                "name": "update-ca.service"
+            }
+        ]
+    }
+  osImageURL: ""
+__EOF__
+
+    cat > "${CLUSTER_DIR}/openshift/99-master-registries.yaml" << __EOF__
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  creationTimestamp: null
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: 99-master-registries
+$(cat registries.yaml)
+__EOF__
+
+    cat > "${CLUSTER_DIR}/openshift/99-worker-registries.yaml" << __EOF__
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  creationTimestamp: null
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 99-worker-registries
+$(cat registries.yaml)
+__EOF__
+
+    # for debug
+    cp "${CLUSTER_DIR}/openshift/99-master-registries.yaml" ./
+    cp "${CLUSTER_DIR}/openshift/99-worker-registries.yaml" ./
+
+    # Generate ignition configs
+    /openshift-install --dir "${CLUSTER_DIR}" create ignition-configs
+
+    # Excecute installer
+    export TF_VAR_libvirt_master_memory=$MASTER_MEMORY
+    export TF_VAR_libvirt_master_vcpu=$MASTER_CPU
+
+else
+    echo "No case defined for $INSTALLER_TAG"
+    exit 1
 fi
 
-# increase workers memory to 6144MB
-/openshift-install create manifests --dir=/root/install
-sed -i -e "s/domainMemory: 4096/domainMemory: $WORKERS_MEMORY/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
-sed -i -e "s/domainVcpu: 2/domainVcpu: $WORKERS_CPU/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
+/openshift-install create cluster --dir "$CLUSTER_DIR" --log-level debug
 
-# run installer
-export TF_VAR_libvirt_master_memory=$MASTER_MEMORY
-export TF_VAR_libvirt_master_vcpu=$MASTER_CPU
-/openshift-install create cluster --dir=/root/install
 
 export KUBECONFIG=/root/install/auth/kubeconfig
 
@@ -154,19 +279,21 @@ for master in ${masters}; do
     oc adm taint nodes ${master} node-role.kubernetes.io/master-
 done
 
-# Add registry:5000 to insecure registries
-until oc patch image.config.openshift.io/cluster --type merge --patch '{"spec": {"registrySources": {"insecureRegistries": ["registry:5000", "brew-pulp-docker01.web.prod.ext.phx2.redhat.com:8888"]}}}'; do
-    sleep 5
-done
+if [[ $INSTALLER_TAG =~ ^.*4\.1$ ]]; then
+  # Add registry:5000 to insecure registries
+  until oc patch image.config.openshift.io/cluster --type merge --patch '{"spec": {"registrySources": {"insecureRegistries": ["registry:5000", "brew-pulp-docker01.web.prod.ext.phx2.redhat.com:8888"]}}}'; do
+      sleep 5
+  done
 
-until [[ $(oc get nodes --no-headers | grep master | grep Ready,SchedulingDisabled | wc -l) -ge 1 ]]; do
-    sleep 10
-done
+  until [[ $(oc get nodes --no-headers | grep master | grep Ready,SchedulingDisabled | wc -l) -ge 1 ]]; do
+      sleep 10
+  done
 
-# Make master nodes schedulable
-for master in ${masters}; do
-    oc adm uncordon ${master}
-done
+  # Make master nodes schedulable
+  for master in ${masters}; do
+      oc adm uncordon ${master}
+  done
+fi
 
 until [[ $(oc get nodes --no-headers | grep -v SchedulingDisabled | grep Ready | wc -l) -ge 2 ]]; do
     sleep 10
