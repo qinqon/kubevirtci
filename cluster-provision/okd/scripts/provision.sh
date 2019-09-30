@@ -90,36 +90,20 @@ if [ ! -f "/etc/installer/token" ]; then
     exit 1
 fi
 
-INSTALL_CONFIG_FILE=/root/install/install-config.yaml
+export CLUSTER_DIR=/root/install
+INSTALL_CONFIG_FILE=$CLUSTER_DIR/install-config.yaml
 
 # we need to install jq and yq to make yaml changes
 dnf install -y jq
 pip install yq
 
-mkdir -p /root/install
+mkdir -p $CLUSTER_DIR
+
+# print version
+/openshift-install version
 
 if [[ $INSTALLER_TAG =~ ^.*4\.1$ ]]; then
-    cp /install-config.yaml /root/install/
-
-    # inject pull secret into install config
-    cat /etc/installer/token >> /root/install/install-config.yaml
-
-    # inject vagrant ssh public key into install config
-    ssh_pub_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
-    echo "sshKey: '$ssh_pub_key'" >> /root/install/install-config.yaml
-
-    if [ ! -z $INSTALLER_RELEASE_IMAGE ]; then
-        export OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE=$INSTALLER_RELEASE_IMAGE
-    fi
-
-    # increase workers memory to 6144MB
-    /openshift-install create manifests --dir=/root/install
-    sed -i -e "s/domainMemory: 4096/domainMemory: $WORKERS_MEMORY/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
-    sed -i -e "s/domainVcpu: 2/domainVcpu: $WORKERS_CPU/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
-
-    # run installer
-    export TF_VAR_libvirt_master_memory=$MASTER_MEMORY
-    export TF_VAR_libvirt_master_vcpu=$MASTER_CPU
+    cp /install-config.yaml $CLUSTER_DIR/
 
 elif [[ $INSTALLER_TAG =~ ^.*4\.2$ ]]; then
     cp /install-config.yaml /tmp/install-config.yaml.tmp
@@ -127,30 +111,29 @@ elif [[ $INSTALLER_TAG =~ ^.*4\.2$ ]]; then
     # set number of workers
     cat /tmp/install-config.yaml.tmp | yq -y '.compute[].replicas = 2' > "$INSTALL_CONFIG_FILE"
 
-    # inject pull secret into install config
-    cat /etc/installer/token >> "$INSTALL_CONFIG_FILE"
+else
+    echo "No case defined for $INSTALLER_TAG"
+    exit 1
+fi
 
-    # inject vagrant ssh public key into install config
-    ssh_pub_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
-    echo "sshKey: '$ssh_pub_key'" >> "$INSTALL_CONFIG_FILE"
+# inject pull secret into install config
+cat /etc/installer/token >> $CLUSTER_DIR/install-config.yaml
 
-    if [ ! -z $INSTALLER_RELEASE_IMAGE ]; then
-        export OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE=$INSTALLER_RELEASE_IMAGE
-    fi
+# inject vagrant ssh public key into install config
+ssh_pub_key="ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
+echo "sshKey: '$ssh_pub_key'" >> $CLUSTER_DIR/install-config.yaml
 
-    # print version
-    /openshift-install version
+# Generate manifests
+/openshift-install create manifests --dir=$CLUSTER_DIR
 
-    export CLUSTER_DIR=/root/install
+# increase workers memory to 6144MB
+sed -i -e "s/domainMemory: 4096/domainMemory: $WORKERS_MEMORY/" $CLUSTER_DIR/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
+sed -i -e "s/domainVcpu: 2/domainVcpu: $WORKERS_CPU/" $CLUSTER_DIR/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
 
-    # Generate manifests
-    /openshift-install --dir "${CLUSTER_DIR}" create manifests
+if [[ $INSTALLER_TAG =~ ^.*4\.2$ ]]; then
 
-    # increase workers memory to 6144MB
-    sed -i -e "s/domainMemory: 4096/domainMemory: $WORKERS_MEMORY/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
-    sed -i -e "s/domainVcpu: 2/domainVcpu: $WORKERS_CPU/" /root/install/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
+    # generate machineconfig for insecure-registries beforehand
 
-    # generate machineconfig for insecure-registries
     cat > registries.conf << __EOF__
 [registries]
   [registries.search]
@@ -227,19 +210,19 @@ __EOF__
     # Generate ignition configs
     /openshift-install --dir "${CLUSTER_DIR}" create ignition-configs
 
-    # Excecute installer
-    export TF_VAR_libvirt_master_memory=$MASTER_MEMORY
-    export TF_VAR_libvirt_master_vcpu=$MASTER_CPU
-
-else
-    echo "No case defined for $INSTALLER_TAG"
-    exit 1
 fi
 
+if [ ! -z $INSTALLER_RELEASE_IMAGE ]; then
+    export OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE=$INSTALLER_RELEASE_IMAGE
+fi
+
+# Excecute installer
+export TF_VAR_libvirt_master_memory=$MASTER_MEMORY
+export TF_VAR_libvirt_master_vcpu=$MASTER_CPU
 /openshift-install create cluster --dir "$CLUSTER_DIR" --log-level debug
 
 
-export KUBECONFIG=/root/install/auth/kubeconfig
+export KUBECONFIG=$CLUSTER_DIR/auth/kubeconfig
 
 # Create htpasswd with user admin
 htpasswd -c -B -b /root/htpasswd admin admin
