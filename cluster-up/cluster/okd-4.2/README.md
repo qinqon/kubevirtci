@@ -10,6 +10,7 @@ local machine and are then pushed to a registry which is exposed at
 
 ```bash
 export KUBEVIRT_PROVIDER=okd-4.2
+export KUBEVIRT_NUM_NODES=3 # master + two workers
 make cluster-up
 ```
 
