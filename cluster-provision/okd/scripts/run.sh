@@ -70,6 +70,10 @@ done
 # wait half minute, just to be sure that we do not get old cluster state
 sleep 30
 
+for node in $(oc get nodes --no-headers | grep Ready,SchedulingDisabled | awk '{ print $1 }'); do
+    oc adm uncordon $node
+done
+
 until [[ $(oc get pods --all-namespaces --no-headers | grep -v Running | grep -v Completed | wc -l) -le 3 ]]; do
     echo "waiting for pods to come online"
     sleep 10
