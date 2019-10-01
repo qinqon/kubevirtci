@@ -106,13 +106,12 @@ if [[ $INSTALLER_TAG =~ ^.*4\.1$ ]]; then
     cp /install-config.yaml $CLUSTER_DIR/
 
 elif [[ $INSTALLER_TAG =~ ^.*4\.2$ ]]; then
-    cp /install-config.yaml /tmp/install-config.yaml.tmp
 
-    # set number of workers
-    cat /tmp/install-config.yaml.tmp | yq -y '.compute[].replicas = 2' > "$INSTALL_CONFIG_FILE"
+    # modify number of workers
+    yq -y '.compute[].replicas = 2' /install-config.yaml > "$INSTALL_CONFIG_FILE"
 
 else
-    echo "No case defined for $INSTALLER_TAG"
+    echo "No case defined for $INSTALLER_TAG" >&2
     exit 1
 fi
 
@@ -162,7 +161,7 @@ spec:
                     "filesystem": "root",
                     "mode": 420,
                     "contents": {
-                    "source": "data:;base64,$(cat registries.conf|base64 -w0)"
+                    "source": "data:;base64,$(base64 -w0 registries.conf)"
                     }
                 }
             ]
@@ -184,7 +183,6 @@ __EOF__
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
-  creationTimestamp: null
   labels:
     machineconfiguration.openshift.io/role: master
   name: 99-master-registries
@@ -196,7 +194,6 @@ __EOF__
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
-  creationTimestamp: null
   labels:
     machineconfiguration.openshift.io/role: worker
   name: 99-worker-registries
