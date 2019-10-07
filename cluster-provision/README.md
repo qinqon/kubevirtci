@@ -39,7 +39,6 @@
 * `kubevirtci/okd-base`: `sha256:259e776998da3a503a30fdf935b29102443b24ca4ea095c9478c37e994e242bb`
 * `kubevirtci/okd-4.1`: `sha256:2b7b5e09b9bdf2ca40b8e153a111702584e2a3e802643e3e7df1f2d97eca0ce8`
 * `kubevirtci/okd-4.2`: `sha256:03b08bf66bf33c3ae1a1f63f1184761535513395e7b9c4cd496e22fc1eb2206b`
->>>>>>> Update sha with latest changes
 
 ## Using gocli
 
