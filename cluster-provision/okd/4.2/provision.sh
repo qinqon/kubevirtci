@@ -23,5 +23,5 @@ ${gocli} provision okd \
 --master-memory 10240 \
 --installer-pull-token-file ${INSTALLER_PULL_SECRET} \
 --installer-repo-tag release-4.2 \
---installer-release-image docker.io/kubevirtci/ocp-release:4.2.0-rc.1 \
+--installer-release-image docker.io/kubevirtci/ocp-release:4.2.0 \
 "kubevirtci/okd-base@${okd_base_hash}"
