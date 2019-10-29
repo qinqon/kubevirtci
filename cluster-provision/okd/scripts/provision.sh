@@ -97,22 +97,33 @@ INSTALL_CONFIG_FILE=$CLUSTER_DIR/install-config.yaml
 dnf install -y jq
 pip install yq
 
+function yq_inline {
+    local expression="$1"
+    local file="$2"
+    if [ ! -f "$file" ]; then
+        echo "$file is not a file!"
+        return 1
+    fi
+    tmp_file=$(mktemp /tmp/output.XXXXXXXXXX)
+    yq -y "$expression" "$file" > "$tmp_file"
+    if [ $? -ne 0 ]; then
+        return $?
+    fi
+    mv "$file" "$file.tmp"
+    mv "$tmp_file" "$file"
+}
+
 mkdir -p $CLUSTER_DIR
 
 # print version
 /openshift-install version
 
-if [[ $INSTALLER_TAG =~ ^.*4\.1$ ]]; then
-    cp /install-config.yaml $CLUSTER_DIR/
+cp /install-config.yaml $CLUSTER_DIR/
 
-elif [[ $INSTALLER_TAG =~ ^.*4\.2$ ]]; then
+if [[ $INSTALLER_TAG =~ ^.*4\.2$ ]]; then
 
     # modify number of workers
-    yq -y '.compute[].replicas = 2' /install-config.yaml > "$INSTALL_CONFIG_FILE"
-
-else
-    echo "No case defined for $INSTALLER_TAG" >&2
-    exit 1
+    yq_inline '.compute[].replicas = 2' "$INSTALL_CONFIG_FILE"
 fi
 
 # inject pull secret into install config
@@ -125,9 +136,12 @@ echo "sshKey: '$ssh_pub_key'" >> $CLUSTER_DIR/install-config.yaml
 # Generate manifests
 /openshift-install create manifests --dir=$CLUSTER_DIR
 
-# increase workers memory to 6144MB
-sed -i -e "s/domainMemory: 4096/domainMemory: $WORKERS_MEMORY/" $CLUSTER_DIR/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
-sed -i -e "s/domainVcpu: 2/domainVcpu: $WORKERS_CPU/" $CLUSTER_DIR/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
+# increase master memory
+yq_inline '.spec.providerSpec.value.domainMemory = 8192' "$CLUSTER_DIR/openshift/99_openshift-cluster-api_master-machines-0.yaml"
+
+# change workers memory and vcpu
+yq_inline '.spec.template.spec.providerSpec.value.domainMemory = '"$WORKERS_MEMORY"' | .spec.template.spec.providerSpec.value.domainVcpu = '"$WORKERS_CPU" \
+        $CLUSTER_DIR/openshift/99_openshift-cluster-api_worker-machineset-0.yaml
 
 if [[ $INSTALLER_TAG =~ ^.*4\.2$ ]]; then
 
