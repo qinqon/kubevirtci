@@ -21,6 +21,8 @@ ${gocli} provision okd \
 --dir-manifests ${PARENT_DIR}/manifests \
 --dir-hacks ${PARENT_DIR}/okd/hacks \
 --master-memory 10240 \
+--workers-memory 8192 \
+--workers-cpu 4 \
 --installer-pull-token-file ${INSTALLER_PULL_SECRET} \
 --installer-repo-tag release-4.2 \
 --installer-release-image docker.io/kubevirtci/ocp-release@sha256:79347c0c3412f0bcc99af573d15ed60ed670ec6c287f98267c3e22ffcf577370 \
