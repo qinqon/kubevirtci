@@ -25,5 +25,5 @@ ${gocli} provision okd \
 --workers-cpu 4 \
 --installer-pull-token-file ${INSTALLER_PULL_SECRET} \
 --installer-repo-tag release-4.2 \
---installer-release-image docker.io/kubevirtci/ocp-release@sha256:79347c0c3412f0bcc99af573d15ed60ed670ec6c287f98267c3e22ffcf577370 \
+--installer-release-image quay.io/openshift-release-dev/ocp-release:4.2.1 \
 "kubevirtci/okd-base@${okd_base_hash}"
