@@ -22,7 +22,7 @@ function get_latest_digest_suffix() {
 
 function build_and_publish_base_images() {
     #TODO: Discover what base images need to be build
-    for base_image in $base_images; do
+    for base_image in ${base_images[@]}; do
         pushd cluster-provision/$base_image
             ./build.sh
             ./publish.sh
@@ -32,7 +32,7 @@ function build_and_publish_base_images() {
 
 function provision_and_publish_providers() {
     #TODO: Discover what providers need to be build
-    for k8s_provider in $k8s_providers; do
+    for k8s_provider in ${k8s_providers[@]}; do
         pushd cluster-provision/k8s/$k8s_provider
             ../provision.sh
             ../publish.sh
