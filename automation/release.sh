@@ -45,9 +45,11 @@ function provision_and_publish_providers() {
     done
 }
 
-show_changes
+kubectl get prowjob -o yaml
 
 exit 1
+
+show_changes
 
 build_and_publish_base_images
 
