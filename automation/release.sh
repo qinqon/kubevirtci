@@ -4,8 +4,9 @@ set -euxo pipefail
 
 workdir=$(mktemp -d)
 ARTIFACTS=${ARTIFACTS:-/tmp}
-base_images=(centos8)
-k8s_providers=(1.17 1.18)
+PULL_BASE_SHA=${PULL_BASE_SHA:-HEAD~1}
+base_images=(centos7 centos8)
+k8s_providers=(1.14 1.15 1.16 1.17 1.18)
 
 end() {
     rm -rf $workdir
@@ -19,6 +20,10 @@ function get_latest_digest_suffix() {
     echo "@$latest_digest"
 }
 
+
+function show_changes() {
+    git diff --name-status ${PULL_BASE_SHA}..HEAD
+}
 
 function build_and_publish_base_images() {
     #TODO: Discover what base images need to be build
@@ -39,6 +44,10 @@ function provision_and_publish_providers() {
         popd
     done
 }
+
+show_changes
+
+exit 1
 
 build_and_publish_base_images
 
