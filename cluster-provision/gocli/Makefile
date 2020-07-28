@@ -14,14 +14,12 @@ GO ?= go
 export GO111MODULE=on
 export GOPROXY=direct
 export GOSUMDB=off
-export GOFLAGS=-mod=vendor
-
 
 all: container-run
 
 .PHONY: gocli
 cli: fmt
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build \
+	GOFLAGS=-mod=vendor CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build \
 				-ldflags "\
 					-X 'kubevirt.io/kubevirtci/cluster-provision/gocli/images.K8S118SUFFIX=$(K8S118SUFFIX)'\
 					-X 'kubevirt.io/kubevirtci/cluster-provision/gocli/images.K8S117SUFFIX=$(K8S117SUFFIX)'\
